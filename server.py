@@ -47,6 +47,10 @@ def _is_valid_frequency(frequency_hz: int) -> bool:
     return min_supported_freq_hz <= frequency_hz <= max_supported_freq_hz
 
 
+def _is_valid_angle(angle: float) -> bool:
+    return 0.0 <= angle <= 360.0
+
+
 def _update_kraken_config(data: dict):
     with open(SETTINGS_FILE) as file:
         settings = json.loads(file.read())
@@ -84,7 +88,7 @@ def _kraken_settings_file_exists() -> bool:
 
 
 app = Flask(__name__)
-app.debug = True
+# app.debug = True
 
 if __name__ != '__main__':
     gunicorn_logger = logging.getLogger('gunicorn.info')
@@ -155,6 +159,28 @@ def update_cache():
                 app.logger.debug(f'Line {line[0:30]} is outdated (time_threshold = {time_threshold}, line ts = {data.time}, delta = {time_threshold-data.time}). Skipping...')
     except:
         app.logger.error(traceback.format_exc())
+
+
+@app.post('/settings')
+def set_settings():
+    try:
+        config = {}
+        payload = request.json
+        station_alias = payload.get('alias', None)
+        if station_alias:
+            config['station_id'] = str(station_alias).strip()[:50]
+
+        angle = payload.get('angle', None)
+        if angle:
+            if not _is_valid_angle(float(angle)):
+                return Response(None, status=400)
+            # todo: set angle in the config
+
+        _update_kraken_config(config)
+        return Response(None, status=200)
+    except:
+        app.logger.error(traceback.format_exc())
+        return Response(None, status=400)
 
 
 @app.post('/frequency')
